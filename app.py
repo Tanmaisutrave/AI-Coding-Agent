@@ -7,6 +7,7 @@ import os
 from typing import TypedDict, List, Optional
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from langchain_core.messages import BaseMessage, HumanMessage
@@ -114,21 +115,19 @@ def run_python_code(code: str) -> str:
         sys.stdout = old_stdout
 
     if result.strip():
-
         return result.strip()
 
     return "Program executed successfully with no output."
 
 
 # ============================================================
-# 7. TEST CASE GENERATOR TOOL
+# 7. TEST CASE GENERATOR
 # ============================================================
 
 @tool
 def generate_test_cases(task_description: str) -> str:
     """
-    Generate 3 to 5 specific test scenarios
-    for the given coding task.
+    Generate 3 to 5 specific test scenarios for a coding task.
     """
 
     prompt = f"""
@@ -159,8 +158,7 @@ Return only a numbered list.
 
 def developer_node(state: CrewState):
     """
-    Developer agent that generates Python code
-    for the requested coding task.
+    Developer agent that generates Python code.
     """
 
     task = state["messages"][-1].content
@@ -193,13 +191,8 @@ Requirements:
         for item in content:
 
             if isinstance(item, dict):
-
-                parts.append(
-                    item.get("text", "")
-                )
-
+                parts.append(item.get("text", ""))
             else:
-
                 parts.append(str(item))
 
         code = "\n".join(parts)
@@ -267,7 +260,7 @@ TEST SCENARIOS
 
 def manager_node(state: CrewState):
     """
-    Manager node that prepares the final testing report.
+    Manager node that prepares the final report.
     """
 
     report = state.get(
@@ -296,7 +289,7 @@ def archiver_node(state: CrewState):
 
 
 # ============================================================
-# 12. BUILD LANGGRAPH
+# 12. LANGGRAPH WORKFLOW
 # ============================================================
 
 workflow = StateGraph(CrewState)
@@ -341,7 +334,7 @@ workflow.add_edge(
 
 def route_after_manager(state: CrewState):
     """
-    Route the workflow from manager to archiver.
+    Route manager result to archiver.
     """
 
     return "archiver"
@@ -358,33 +351,361 @@ workflow.add_edge(
 )
 
 
-# ============================================================
-# 13. COMPILE
-# ============================================================
-
 agent = workflow.compile()
 
 
 # ============================================================
-# 14. API ENDPOINTS
+# 13. WEB UI
 # ============================================================
 
-@app.get("/")
-def home():
-    """
-    Health check endpoint.
-    """
+HTML_PAGE = """
+<!DOCTYPE html>
 
-    return {
-        "status": "online",
-        "message": "AI Coding Agent is running."
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>AI Coding Agent</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+.container {
+    width: 90%;
+    max-width: 1100px;
+    margin: 40px auto;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 35px;
+}
+
+.header h1 {
+    font-size: 42px;
+    margin-bottom: 10px;
+}
+
+.header p {
+    color: #94a3b8;
+    font-size: 17px;
+}
+
+.card {
+    background: #1e293b;
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 25px;
+    border: 1px solid #334155;
+}
+
+label {
+    display: block;
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 12px;
+}
+
+textarea {
+    width: 100%;
+    min-height: 150px;
+    resize: vertical;
+    background: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid #475569;
+    border-radius: 10px;
+    padding: 15px;
+    font-size: 16px;
+    outline: none;
+}
+
+textarea:focus {
+    border-color: #38bdf8;
+}
+
+button {
+    margin-top: 15px;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: #e11d48;
+    color: white;
+    font-size: 17px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #be123c;
+}
+
+button:disabled {
+    background: #475569;
+    cursor: not-allowed;
+}
+
+.section-title {
+    font-size: 20px;
+    margin-bottom: 12px;
+}
+
+pre {
+    background: #020617;
+    border-radius: 10px;
+    padding: 18px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    color: #cbd5e1;
+    line-height: 1.5;
+}
+
+.status {
+    text-align: center;
+    margin-top: 15px;
+    color: #38bdf8;
+}
+
+.hidden {
+    display: none;
+}
+
+.footer {
+    text-align: center;
+    color: #64748b;
+    margin-top: 30px;
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+
+        <h1>🤖 AI Coding Agent</h1>
+
+        <p>
+            Multi-Agent Python Developer & Tester
+        </p>
+
+    </div>
+
+
+    <div class="card">
+
+        <label for="task">
+            Enter Your Coding Task
+        </label>
+
+        <textarea
+            id="task"
+            placeholder="Example: Create a Python program to check whether a number is prime."
+        ></textarea>
+
+        <button
+            id="runButton"
+            onclick="runAgent()"
+        >
+            Run AI Agent
+        </button>
+
+        <div id="status" class="status"></div>
+
+    </div>
+
+
+    <div id="results" class="hidden">
+
+
+        <div class="card">
+
+            <div class="section-title">
+                👨‍💻 Generated Python Code
+            </div>
+
+            <pre id="code"></pre>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="section-title">
+                🧪 Test Scenarios
+            </div>
+
+            <pre id="tests"></pre>
+
+        </div>
+
+
+        <div class="card">
+
+            <div class="section-title">
+                📊 Execution Report
+            </div>
+
+            <pre id="report"></pre>
+
+        </div>
+
+
+    </div>
+
+
+    <div class="footer">
+
+        Built with FastAPI + LangGraph + Gemini
+
+    </div>
+
+</div>
+
+
+<script>
+
+async function runAgent() {
+
+    const task =
+        document.getElementById("task").value.trim();
+
+    const button =
+        document.getElementById("runButton");
+
+    const status =
+        document.getElementById("status");
+
+    const results =
+        document.getElementById("results");
+
+
+    if (!task) {
+
+        status.textContent =
+            "Please enter a coding task.";
+
+        return;
     }
 
+
+    button.disabled = true;
+
+    button.textContent = "Running AI Agent...";
+
+    status.textContent =
+        "Developer and Tester agents are working...";
+
+    results.classList.add("hidden");
+
+
+    try {
+
+        const response = await fetch("/run", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                task: task
+            })
+
+        });
+
+
+        const data = await response.json();
+
+
+        if (!data.success) {
+
+            throw new Error(
+                data.error || "Agent failed."
+            );
+
+        }
+
+
+        document.getElementById("code").textContent =
+            data.code || "No code generated.";
+
+
+        document.getElementById("tests").textContent =
+            data.test_cases || "No test cases generated.";
+
+
+        document.getElementById("report").textContent =
+            data.report || "No report generated.";
+
+
+        results.classList.remove("hidden");
+
+        status.textContent =
+            "✓ AI Agent completed successfully.";
+
+
+    } catch (error) {
+
+        status.textContent =
+            "Error: " + error.message;
+
+    }
+
+
+    button.disabled = false;
+
+    button.textContent = "Run AI Agent";
+
+}
+
+</script>
+
+
+</body>
+
+</html>
+"""
+
+
+# ============================================================
+# 14. UI ROUTE
+# ============================================================
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+
+    return HTML_PAGE
+
+
+# ============================================================
+# 15. API ENDPOINT
+# ============================================================
 
 @app.post("/run")
 def run_agent(request: CodingTask):
     """
-    Run the AI coding agent for a given task.
+    Run the AI coding agent.
     """
 
     task = request.task.strip()
@@ -395,6 +716,7 @@ def run_agent(request: CodingTask):
             "success": False,
             "error": "Coding task cannot be empty."
         }
+
 
     initial_state = {
 
@@ -411,6 +733,7 @@ def run_agent(request: CodingTask):
         "report": None
     }
 
+
     try:
 
         result = agent.invoke(
@@ -419,6 +742,7 @@ def run_agent(request: CodingTask):
                 "recursion_limit": 20
             }
         )
+
 
         return {
 
@@ -431,7 +755,9 @@ def run_agent(request: CodingTask):
             "test_cases": result.get("test_cases"),
 
             "report": result.get("report")
+
         }
+
 
     except Exception as e:
 
@@ -440,4 +766,5 @@ def run_agent(request: CodingTask):
             "success": False,
 
             "error": str(e)
+
         }
